@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Festival OTD Estimate Filler</title>
+    <style>
+    /* Google Sheet Form Styles */
+    :root {
+        --primary-color: #5d5cde;
+        --primary-light: #8584ff;
+        --primary-dark: #3534b6;
+        --text-color: #333333;
+        --light-text: #757575;
+        --border-color: #e0e0e0;
+        --background-color: #ffffff;
+        --error-color: #e53935;
+        --success-color: #43a047;
+        --box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        --border-radius: 8px;
+        --transition: all 0.3s ease;
+    }
+    
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: var(--text-color);
+        background-color: #f9f9f9;
+        padding: 20px;
+    }
+    
+    .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: var(--background-color);
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+        padding: 30px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: linear-gradient(to right, var(--primary-color), var(--primary-light));
+    }
+    
+    h1 {
+        font-size: 28px;
+        margin-bottom: 16px;
+        color: var(--primary-color);
+        text-align: center;
+    }
+    
+    .form-description {
+        margin-bottom: 24px;
+        text-align: center;
+        color: var(--light-text);
+    }
+    
+    .form-group {
+        margin-bottom: 24px;
+    }
+    
+    label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+    
+    .required {
+        color: var(--error-color);
+        margin-left: 4px;
+    }
+    
+    input[type="text"],
+    input[type="email"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="date"],
+    input[type="time"],
+    input[type="url"],
+    input[type="color"],
+    input[type="password"],
+    textarea,
+    select {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        font-size: 16px;
+        transition: var(--transition);
+    }
+    
+    input:focus,
+    textarea:focus,
+    select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(93, 92, 222, 0.2);
+    }
+    
+    /* Readonly styling for calculated and fetched fields */
+    input[readonly] {
+        background-color: #f0f0f0; /* Lighter grey for disabled look */
+        color: var(--light-text);
+        cursor: not-allowed;
+    }
+    
+    /* CSS for the alert message if validation fails */
+    #validationAlert {
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: var(--border-radius);
+        background-color: #fbe5e5;
+        color: var(--error-color);
+        border: 1px solid var(--error-color);
+        font-weight: 500;
+        display: none; /* Hidden by default */
+        text-align: center;
+    }
+
+    /* Style for final payable display */
+    #discountDisplay {
+        text-align: center;
+        margin-top: 10px; /* Space from discount input */
+        margin-bottom: 25px; /* Space before submit button */
+        padding: 15px;
+        border-radius: var(--border-radius);
+        border: 2px dashed var(--error-color); /* Highlight the final value */
+    }
+
+    #discountDisplay .final-amount {
+        font-size: 2.2em;
+        font-weight: 700;
+        color: var(--error-color); /* Red text for the final figure */
+        margin: 5px 0;
+    }
+
+    #discountDisplay .label {
+        font-size: 1.1em;
+        font-weight: 500;
+        color: var(--text-color);
+    }
+    
+    button {
+        background-color: #5d5cde;
+        color: white;
+        border: none;
+        transition: background-color 0.3s;
+        padding: 12px 24px;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+    }
+    
+    button:hover {
+        opacity: 0.9;
+    }
+    
+    button:active {
+        transform: translateY(1px);
+    }
+    
+    .submit-group {
+        margin-top: 32px;
+        text-align: center;
+    }
+    
+    /* Loading, Success, and Error States */
+    .hidden {
+        display: none !important;
+    }
+    
+    .loading-indicator,
+    .success-message,
+    .error-message {
+        text-align: center;
+        padding: 30px;
+    }
+    
+    .loading-indicator p,
+    .success-message p,
+    .error-message p {
+        margin-bottom: 16px;
+    }
+    
+    .success-message p {
+        color: var(--success-color);
+        font-weight: 500;
+    }
+    
+    .error-message p {
+        color: var(--error-color);
+        font-weight: 500;
+    }
+    
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(93, 92, 222, 0.3);
+        border-top: 4px solid var(--primary-color);
+        border-radius: 50%;
+        margin: 0 auto 16px auto;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Helper Text */
+    .help-text {
+        font-size: 14px;
+        color: var(--light-text);
+        margin-top: 4px;
+    }
+    
+    /* Responsive Design */
+    @media screen and (max-width: 600px) {
+        .container {
+            padding: 20px;
+        }
+        
+        h1 {
+            font-size: 24px;
+        }
+        
+        input, textarea, select, button {
+            padding: 10px 14px;
+            font-size: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+    }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Festival OTD Estimate Filler</h1>
+        <p class="form-description">Festival OTD Filler</p>
+        
+        <!-- Added validation alert box --><div id="validationAlert" class="hidden">
+            Please search a **Unique No.** first to autofill Customer Name and Phone Number.
+        </div>
+
+        <!-- Updated form action with the URL provided by the user --><form id="googleSheetForm" method="POST" action="https://script.google.com/macros/s/AKfycby1RVMIaOpkfnVkhgKf99v_1xMd4it0jy4_xCnpfa9obNLWWmT44sm-j-8egATLht9ZhQ/exec">
+            <div class="form-group">
+                <!-- Added onchange for autofetching --><label for="unique_no">Unique No. <span class="required">*</span></label>
+                <input type="number" id="unique_no" name="unique_no" placeholder="Unique Number Challan se Dekhkar daalein" onchange="handleUniqueNoChange()" required>
+                <p class="help-text" id="fetchStatus">Unique number daalte hi Customer Name aur Phone Number fetch honge.</p>
+            </div>
+            <div class="form-group">
+                <label for="customer_name">Customer Name <span class="required">*</span></label>
+                <!-- Added readonly attribute by default --><input type="text" id="customer_name" name="customer_name" placeholder="Enter Customer Name" required readonly>
+            </div>
+            <div class="form-group">
+                <label for="phone_number">Phone Number / ID <span class="required">*</span></label>
+                <!-- CHANGED TYPE TO "text" TO SUPPORT ALPHANUMERIC DATA, and added readonly --><input type="text" id="phone_number" name="phone_number" placeholder="Enter Phone Number / ID" required readonly>
+            </div>
+
+            <!-- Calculation Inputs - Added oninput for dynamic calculation --><div class="form-group">
+                <label for="exshowroom">Ex-Showroom <span class="required">*</span></label>
+                <input type="number" id="exshowroom" name="exshowroom" placeholder="Enter Ex-Showroom" oninput="calculateTotalCost()" required>
+            </div>
+            <div class="form-group">
+                <label for="std_fitting">STD Fitting <span class="required">*</span></label>
+                <input type="number" id="std_fitting" name="std_fitting" placeholder="Enter STD Fitting" oninput="calculateTotalCost()" required>
+            </div>
+            <div class="form-group">
+                <label for="joy">Joy <span class="required">*</span></label>
+                <input type="number" id="joy" name="joy" placeholder="Enter Joy" oninput="calculateTotalCost()" required>
+            </div>
+            <div class="form-group">
+                <label for="helmet">Helmet <span class="required">*</span></label>
+                <input type="number" id="helmet" name="helmet" placeholder="Enter Helmet" oninput="calculateTotalCost()" required>
+            </div>
+            <div class="form-group">
+                <label for="insurance">Insurance <span class="required">*</span></label>
+                <input type="number" id="insurance" name="insurance" placeholder="Enter Insurance" oninput="calculateTotalCost()" required>
+            </div>
+            <div class="form-group">
+                <label for="registration">Registration <span class="required">*</span></label>
+                <input type="number" id="registration" name="registration" placeholder="Enter Registration" oninput="calculateTotalCost()" required>
+            </div>
+            <div class="form-group">
+                <label for="extended_warranty">Extended Warranty <span class="required">*</span></label>
+                <input type="number" id="extended_warranty" name="extended_warranty" placeholder="Enter Extended Warranty" oninput="calculateTotalCost()" required>
+            </div>
+            <div class="form-group">
+                <label for="accessories_amount">Accessories Amount <span class="required">*</span></label>
+                <input type="number" id="accessories_amount" name="accessories_amount" placeholder="Enter Accessories Amount" oninput="calculateTotalCost()" required>
+            </div>
+
+            <!-- Dynamic Calculated Field (Shows Gross Total - NO Discount Subtraction) --><div class="form-group">
+                <label for="total_vehicle_cost">Total Vehicle Cost (Gross Total) <span class="required">*</span></label>
+                <input type="number" id="total_vehicle_cost" name="total_vehicle_cost" placeholder="Gross Total (Auto-calculated)" readonly required>
+                <p class="help-text">Yeh field sabhi items ka **Gross Total** jodkar dikhayega.</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="discount_given">Discount Given <span class="required">*</span></label>
+                <!-- Added oninput for discount display --><input type="number" id="discount_given" name="discount_given" placeholder="Enter Discount Given" oninput="calculateTotalCost(); updateDiscountDisplay();" required>
+            </div>
+            
+            <!-- Final Payable Amount Display in Red Text --><div id="discountDisplay" class="form-group">
+                <!-- Content will be updated by JavaScript --></div>
+
+            <div class="form-group submit-group">
+                <button type="submit" id="submitButton">Submit</button>
+            </div>
+        </form>
+            
+        <div id="loadingIndicator" class="loading-indicator hidden">
+            <div class="spinner"></div>
+            <p>Submitting your response...</p>
+        </div>
+            
+        <div id="successMessage" class="success-message hidden">
+            <p>Thank you for your submission!</p>
+            <button type="button" id="resetButton">Submit Another Response</button>
+        </div>
+            
+        <div id="errorMessage" class="error-message hidden">
+            <p>Sorry, there was an error submitting your form. Please try again later.</p>
+            <button type="button" id="retryButton">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Use the new Web App URL for both POST (submission) and GET (fetching)
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1RVMIaOpkfnVkhgKf99v_1xMd4it0jy4_xCnpfa9obNLWWmT44sm-j-8egATLht9ZhQ/exec';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('googleSheetForm');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            const resetButton = document.getElementById('resetButton');
+            const retryButton = document.getElementById('retryButton');
+            const fetchStatus = document.getElementById('fetchStatus');
+            const validationAlert = document.getElementById('validationAlert');
+            const customerNameInput = document.getElementById('customer_name');
+            const phoneNumberInput = document.getElementById('phone_number');
+            const discountGivenInput = document.getElementById('discount_given'); // Get discount input
+            const discountDisplay = document.getElementById('discountDisplay'); // Get discount display div
+            const totalVehicleCostInput = document.getElementById('total_vehicle_cost');
+
+            // Function to set fields to read-only state
+            function setReadOnly(isReadOnly) {
+                customerNameInput.readOnly = isReadOnly;
+                phoneNumberInput.readOnly = isReadOnly;
+            }
+
+            // Set read-only initially
+            setReadOnly(true);
+
+            // --- Calculation Logic (Calculates Gross Total) ---
+            window.calculateTotalCost = function() {
+                const fields = [
+                    'exshowroom', 'std_fitting', 'joy', 'helmet', 
+                    'insurance', 'registration', 'extended_warranty', 'accessories_amount'
+                ];
+                let sum = 0;
+                
+                fields.forEach(id => {
+                    const input = document.getElementById(id);
+                    sum += parseFloat(input.value) || 0;
+                });
+                
+                // Total Vehicle Cost field now shows the Gross Total (sum only)
+                const grossTotal = sum; 
+                
+                // Update the Total Vehicle Cost input field
+                totalVehicleCostInput.value = grossTotal.toFixed(0);
+
+                // Ensure discount display is updated whenever gross total is calculated
+                updateDiscountDisplay();
+            };
+
+            // --- Update Discount Display Logic (Calculates Final Payable) ---
+            window.updateDiscountDisplay = function() {
+                const grossTotal = parseFloat(totalVehicleCostInput.value) || 0;
+                const discount = parseFloat(discountGivenInput.value) || 0;
+                
+                // Final calculation (Gross Total - Discount) is shown here
+                const finalPayable = grossTotal - discount; 
+
+                if (grossTotal > 0 || discount > 0) {
+                    discountDisplay.innerHTML = `
+                        <div class="label">
+                            Final Payable Amount (Total - Discount)
+                        </div>
+                        <div class="final-amount">
+                            ₹${finalPayable.toFixed(0)}
+                        </div>
+                        <div style="font-size: 0.9em; color: var(--light-text); margin-top: 5px;">
+                             (Discount Applied: -₹${discount.toFixed(0)})
+                        </div>
+                    `;
+                    discountDisplay.style.display = 'block';
+                } else {
+                    discountDisplay.style.display = 'none';
+                }
+            };
+
+            // --- Autofetch Logic (Same as before) ---
+            window.handleUniqueNoChange = async function() {
+                const uniqueNoInput = document.getElementById('unique_no');
+                const uniqueNo = uniqueNoInput.value.trim();
+
+                // Clear fields and set them to readOnly while searching
+                customerNameInput.value = '';
+                phoneNumberInput.value = '';
+                setReadOnly(true); 
+                validationAlert.classList.add('hidden');
+
+                if (uniqueNo.length === 0) {
+                    fetchStatus.textContent = 'Unique number daalte hi Customer Name aur Phone Number fetch honge.';
+                    fetchStatus.style.color = 'var(--light-text)';
+                    return;
+                }
+
+                fetchStatus.textContent = 'Data search kiya ja raha hai...';
+                fetchStatus.style.color = 'var(--primary-color)';
+
+                try {
+                    // Use the SCRIPT_URL for the GET request
+                    const response = await fetch(`${SCRIPT_URL}?unique_no=${uniqueNo}`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        fetchStatus.textContent = 'Yeh Unique Number Sheet mein nahi mila. Please manually daalein.';
+                        fetchStatus.style.color = 'var(--error-color)';
+                        setReadOnly(false); // Make editable if not found for manual entry
+                    } else {
+                        // Success: Fill the fields and keep them read-only
+                        customerNameInput.value = data.customer_name || '';
+                        phoneNumberInput.value = data.phone_number || ''; 
+                        fetchStatus.textContent = 'Customer data successfully fetch ho gaya!';
+                        fetchStatus.style.color = 'var(--success-color)';
+                        setReadOnly(true); // Keep readOnly if found
+                    }
+
+                } catch (error) {
+                    fetchStatus.textContent = 'Network error: Data fetch nahi ho paya. Please check connection.';
+                    fetchStatus.style.color = 'var(--error-color)';
+                    setReadOnly(false); // Make editable on catastrophic error
+                    console.error('Fetch Error:', error);
+                }
+            };
+
+            // --- Form Submission Logic ---
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // 1. Check if Customer Name and Phone Number are filled
+                if (!customerNameInput.value.trim() || !phoneNumberInput.value.trim()) {
+                    validationAlert.classList.remove('hidden');
+                    fetchStatus.textContent = 'Validation Failed: Please search a unique number first.';
+                    fetchStatus.style.color = 'var(--error-color)';
+                    return; // Stop submission
+                }
+                
+                validationAlert.classList.add('hidden'); // Hide alert if validation passes
+
+                // 2. Perform final calculation (Gross Total goes into the input field for submission)
+                window.calculateTotalCost(); 
+                
+                // Show loading indicator
+                form.classList.add('hidden');
+                loadingIndicator.classList.remove('hidden');
+                
+                const formData = new FormData(form);
+                
+                const formEntries = Array.from(formData.entries());
+                const formParams = new URLSearchParams();
+                
+                formEntries.forEach(([key, value]) => {
+                    formParams.append(key, value);
+                });
+                
+                // Send data to Google Script (using the same SCRIPT_URL)
+                fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formParams
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loadingIndicator.classList.add('hidden');
+                    
+                    if (data.result === 'success') {
+                        successMessage.classList.remove('hidden');
+                    } else {
+                        errorMessage.classList.remove('hidden');
+                        console.error('Form submission error:', data.error);
+                    }
+                })
+                .catch(error => {
+                    loadingIndicator.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
+                    console.error('Form submission error:', error);
+                });
+            });
+            
+            // Reset form after successful submission
+            resetButton.addEventListener('click', function() {
+                form.reset();
+                successMessage.classList.add('hidden');
+                form.classList.remove('hidden');
+                validationAlert.classList.add('hidden'); // Hide validation alert
+                fetchStatus.textContent = 'Unique number daalte hi Customer Name aur Phone Number fetch honge.';
+                fetchStatus.style.color = 'var(--light-text)';
+                // Make fields read-only again upon reset
+                setReadOnly(true);
+                discountDisplay.style.display = 'none'; // Hide discount display on reset
+            });
+            
+            // Retry after error
+            retryButton.addEventListener('click', function() {
+                errorMessage.classList.add('hidden');
+                form.classList.remove('hidden');
+            });
+
+            // Initial calls
+            window.calculateTotalCost(); 
+            window.updateDiscountDisplay(); // Call initially to set correct state
+        });
+    </script>
+</body>
+</html>
