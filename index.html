@@ -229,10 +229,8 @@
         margin-top: 4px;
     }
     
-    .data-toolbar { display:flex; align-items:center; justify-content:space-between;
-        gap:12px; padding:10px 12px; margin-bottom:20px; background:#f3f3ff;
-        border:1px solid #e1e0ff; border-radius:8px; font-size:13px; }
-    .data-toolbar button { flex-shrink:0; padding:7px 12px; font-size:13px; }
+    .data-toolbar { margin:-18px 0 10px; padding:0; text-align:right;
+        font-size:11px; line-height:16px; color:var(--light-text); }
     button:disabled { opacity:.55; cursor:wait; }
     #validationAlert:not(.hidden) { display:block; }
     /* Responsive Design */
@@ -263,7 +261,6 @@
         
         <div class="data-toolbar" aria-live="polite">
             <span id="dataStatus">Loading customer data...</span>
-            <button type="button" id="refreshDataButton" disabled>Loading...</button>
         </div>
         <!-- Added validation alert box --><div id="validationAlert" class="hidden">
             Please search a <strong>Unique No.</strong> first to autofill Customer Name and Phone Number.
@@ -432,7 +429,6 @@
             // One bulk request at startup; every lookup afterwards uses this Map.
             const uniqueNoInput = document.getElementById('unique_no');
             const dataStatus = document.getElementById('dataStatus');
-            const refreshDataButton = document.getElementById('refreshDataButton');
             const submitButton = document.getElementById('submitButton');
             let customerIndex = new Map();
             let dataState = 'loading';
@@ -458,7 +454,7 @@
                 if (dataState !== 'ready') {
                     fetchStatus.textContent = dataState === 'loading'
                         ? 'Data load ho raha hai. Load hote hi is number ki details aa jayengi.'
-                        : 'Data load nahi hua. Upar Retry Data dabayein.';
+                        : 'Data load nahi hua. Page reload karein.';
                     fetchStatus.style.color = 'var(--error-color)';
                     return;
                 }
@@ -470,7 +466,7 @@
                     fetchStatus.textContent = 'Customer details ready!';
                     fetchStatus.style.color = 'var(--success-color)';
                 } else {
-                    fetchStatus.textContent = 'Yeh Unique Number nahi mila. Naye data ke liye Refresh Data karein, ya manually daalein.';
+                    fetchStatus.textContent = 'Yeh Unique Number nahi mila. Naye data ke liye page reload karein, ya manually daalein.';
                     fetchStatus.style.color = 'var(--error-color)';
                     setReadOnly(false);
                 }
@@ -482,8 +478,6 @@
                 clearCustomer();
                 submitButton.disabled = true;
                 dataStatus.textContent = 'Loading customer data...';
-                refreshDataButton.disabled = true;
-                refreshDataButton.textContent = 'Loading...';
                 window.handleUniqueNoChange();
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), 45000);
@@ -510,20 +504,17 @@
                         }
                         customerIndex = nextIndex;
                         dataState = 'ready';
-                        dataStatus.textContent = customerIndex.size.toLocaleString('en-IN') + ' records ready • Instant search';
-                        refreshDataButton.textContent = 'Refresh Data';
+                        dataStatus.textContent = customerIndex.size.toLocaleString('en-IN') + ' records ready';
                         submitButton.disabled = false;
                     } catch (error) {
                         dataState = 'error';
                         customerIndex.clear();
                         dataStatus.textContent = error.name === 'AbortError'
-                            ? 'Loading timed out. Please retry.'
-                            : 'Data load failed. Check connection and updated Code.gs deployment.';
-                        refreshDataButton.textContent = 'Retry Data';
+                            ? 'Loading timed out. Please reload page.'
+                            : 'Data load failed. Check connection / deployment and reload page.';
                         console.error('Customer preload failed:', error);
                     } finally {
                         clearTimeout(timeout);
-                        refreshDataButton.disabled = false;
                         preloadPromise = null;
                         // Resolve only the CURRENT input, even if it changed during loading.
                         window.handleUniqueNoChange();
@@ -531,7 +522,6 @@
                 })();
                 return preloadPromise;
             }
-            refreshDataButton.addEventListener('click', preloadCustomerData);
 
             // --- Form Submission Logic ---
             form.addEventListener('submit', function(e) {
