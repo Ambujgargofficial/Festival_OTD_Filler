@@ -229,6 +229,12 @@
         margin-top: 4px;
     }
     
+    .data-toolbar { display:flex; align-items:center; justify-content:space-between;
+        gap:12px; padding:10px 12px; margin-bottom:20px; background:#f3f3ff;
+        border:1px solid #e1e0ff; border-radius:8px; font-size:13px; }
+    .data-toolbar button { flex-shrink:0; padding:7px 12px; font-size:13px; }
+    button:disabled { opacity:.55; cursor:wait; }
+    #validationAlert:not(.hidden) { display:block; }
     /* Responsive Design */
     @media screen and (max-width: 600px) {
         .container {
@@ -255,14 +261,18 @@
         <h1>Festival OTD Estimate Filler</h1>
         <p class="form-description">Festival OTD Filler</p>
         
+        <div class="data-toolbar" aria-live="polite">
+            <span id="dataStatus">Loading customer data...</span>
+            <button type="button" id="refreshDataButton" disabled>Loading...</button>
+        </div>
         <!-- Added validation alert box --><div id="validationAlert" class="hidden">
-            Please search a **Unique No.** first to autofill Customer Name and Phone Number.
+            Please search a <strong>Unique No.</strong> first to autofill Customer Name and Phone Number.
         </div>
 
         <!-- Updated form action with the URL provided by the user --><form id="googleSheetForm" method="POST" action="https://script.google.com/macros/s/AKfycby1RVMIaOpkfnVkhgKf99v_1xMd4it0jy4_xCnpfa9obNLWWmT44sm-j-8egATLht9ZhQ/exec">
             <div class="form-group">
                 <!-- Added onchange for autofetching --><label for="unique_no">Unique No. <span class="required">*</span></label>
-                <input type="number" id="unique_no" name="unique_no" placeholder="Unique Number Challan se Dekhkar daalein" onchange="handleUniqueNoChange()" required>
+                <input type="text" inputmode="numeric" pattern="[0-9]+" autocomplete="off" id="unique_no" name="unique_no" placeholder="Unique Number Challan se Dekhkar daalein" oninput="handleUniqueNoChange()" required>
                 <p class="help-text" id="fetchStatus">Unique number daalte hi Customer Name aur Phone Number fetch honge.</p>
             </div>
             <div class="form-group">
@@ -419,56 +429,120 @@
                 }
             };
 
-            // --- Autofetch Logic (Same as before) ---
-            window.handleUniqueNoChange = async function() {
-                const uniqueNoInput = document.getElementById('unique_no');
-                const uniqueNo = uniqueNoInput.value.trim();
+            // One bulk request at startup; every lookup afterwards uses this Map.
+            const uniqueNoInput = document.getElementById('unique_no');
+            const dataStatus = document.getElementById('dataStatus');
+            const refreshDataButton = document.getElementById('refreshDataButton');
+            const submitButton = document.getElementById('submitButton');
+            let customerIndex = new Map();
+            let dataState = 'loading';
+            let preloadPromise = null;
+            let resolvedUniqueNo = null;
 
-                // Clear fields and set them to readOnly while searching
+            function clearCustomer() {
                 customerNameInput.value = '';
                 phoneNumberInput.value = '';
-                setReadOnly(true); 
-                validationAlert.classList.add('hidden');
+                resolvedUniqueNo = null;
+                setReadOnly(true);
+            }
 
-                if (uniqueNo.length === 0) {
-                    fetchStatus.textContent = 'Unique number daalte hi Customer Name aur Phone Number fetch honge.';
-                    fetchStatus.style.color = 'var(--light-text)';
+            window.handleUniqueNoChange = function() {
+                const key = uniqueNoInput.value.trim();
+                clearCustomer();
+                validationAlert.classList.add('hidden');
+                fetchStatus.style.color = 'var(--light-text)';
+                if (!key) {
+                    fetchStatus.textContent = 'Unique number daalte hi customer details fill hongi.';
                     return;
                 }
-
-                fetchStatus.textContent = 'Data search kiya ja raha hai...';
-                fetchStatus.style.color = 'var(--primary-color)';
-
-                try {
-                    // Use the SCRIPT_URL for the GET request
-                    const response = await fetch(`${SCRIPT_URL}?unique_no=${uniqueNo}`);
-                    const data = await response.json();
-
-                    if (data.error) {
-                        fetchStatus.textContent = 'Yeh Unique Number Sheet mein nahi mila. Please manually daalein.';
-                        fetchStatus.style.color = 'var(--error-color)';
-                        setReadOnly(false); // Make editable if not found for manual entry
-                    } else {
-                        // Success: Fill the fields and keep them read-only
-                        customerNameInput.value = data.customer_name || '';
-                        phoneNumberInput.value = data.phone_number || ''; 
-                        fetchStatus.textContent = 'Customer data successfully fetch ho gaya!';
-                        fetchStatus.style.color = 'var(--success-color)';
-                        setReadOnly(true); // Keep readOnly if found
-                    }
-
-                } catch (error) {
-                    fetchStatus.textContent = 'Network error: Data fetch nahi ho paya. Please check connection.';
+                if (dataState !== 'ready') {
+                    fetchStatus.textContent = dataState === 'loading'
+                        ? 'Data load ho raha hai. Load hote hi is number ki details aa jayengi.'
+                        : 'Data load nahi hua. Upar Retry Data dabayein.';
                     fetchStatus.style.color = 'var(--error-color)';
-                    setReadOnly(false); // Make editable on catastrophic error
-                    console.error('Fetch Error:', error);
+                    return;
+                }
+                resolvedUniqueNo = key;
+                const row = customerIndex.get(key);
+                if (row) {
+                    customerNameInput.value = row.customer_name;
+                    phoneNumberInput.value = row.phone_number;
+                    fetchStatus.textContent = 'Customer details ready!';
+                    fetchStatus.style.color = 'var(--success-color)';
+                } else {
+                    fetchStatus.textContent = 'Yeh Unique Number nahi mila. Naye data ke liye Refresh Data karein, ya manually daalein.';
+                    fetchStatus.style.color = 'var(--error-color)';
+                    setReadOnly(false);
                 }
             };
+
+            function preloadCustomerData() {
+                if (preloadPromise) return preloadPromise;
+                dataState = 'loading';
+                clearCustomer();
+                submitButton.disabled = true;
+                dataStatus.textContent = 'Loading customer data...';
+                refreshDataButton.disabled = true;
+                refreshDataButton.textContent = 'Loading...';
+                window.handleUniqueNoChange();
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 45000);
+                preloadPromise = (async function() {
+                    try {
+                        const url = new URL(SCRIPT_URL);
+                        url.searchParams.set('action', 'fetch_all');
+                        const response = await fetch(url.toString(), {
+                            signal: controller.signal, cache: 'no-store'
+                        });
+                        if (!response.ok) throw new Error('HTTP ' + response.status);
+                        const payload = await response.json();
+                        if (payload.result !== 'success' || !Array.isArray(payload.data)) {
+                            throw new Error(payload.error || 'Please deploy the updated Code.gs first.');
+                        }
+                        const nextIndex = new Map();
+                        for (const row of payload.data) {
+                            if (!row || typeof row.unique_no !== 'string' ||
+                                typeof row.customer_name !== 'string' || typeof row.phone_number !== 'string') {
+                                throw new Error('Invalid customer data. Please check Code.gs deployment.');
+                            }
+                            const key = row.unique_no.trim();
+                            if (key && !nextIndex.has(key)) nextIndex.set(key, row);
+                        }
+                        customerIndex = nextIndex;
+                        dataState = 'ready';
+                        dataStatus.textContent = customerIndex.size.toLocaleString('en-IN') + ' records ready • Instant search';
+                        refreshDataButton.textContent = 'Refresh Data';
+                        submitButton.disabled = false;
+                    } catch (error) {
+                        dataState = 'error';
+                        customerIndex.clear();
+                        dataStatus.textContent = error.name === 'AbortError'
+                            ? 'Loading timed out. Please retry.'
+                            : 'Data load failed. Check connection and updated Code.gs deployment.';
+                        refreshDataButton.textContent = 'Retry Data';
+                        console.error('Customer preload failed:', error);
+                    } finally {
+                        clearTimeout(timeout);
+                        refreshDataButton.disabled = false;
+                        preloadPromise = null;
+                        // Resolve only the CURRENT input, even if it changed during loading.
+                        window.handleUniqueNoChange();
+                    }
+                })();
+                return preloadPromise;
+            }
+            refreshDataButton.addEventListener('click', preloadCustomerData);
 
             // --- Form Submission Logic ---
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
                 
+                // Never submit old customer details for a changed ID or failed preload.
+                if (dataState !== 'ready' || resolvedUniqueNo !== uniqueNoInput.value.trim()) {
+                    window.handleUniqueNoChange();
+                    validationAlert.classList.remove('hidden');
+                    return;
+                }
                 // 1. Check if Customer Name and Phone Number are filled
                 if (!customerNameInput.value.trim() || !phoneNumberInput.value.trim()) {
                     validationAlert.classList.remove('hidden');
@@ -524,6 +598,7 @@
             // Reset form after successful submission
             resetButton.addEventListener('click', function() {
                 form.reset();
+                clearCustomer();
                 successMessage.classList.add('hidden');
                 form.classList.remove('hidden');
                 validationAlert.classList.add('hidden'); // Hide validation alert
@@ -539,6 +614,8 @@
                 errorMessage.classList.add('hidden');
                 form.classList.remove('hidden');
             });
+
+            preloadCustomerData();
 
             // Initial calls
             window.calculateTotalCost(); 
